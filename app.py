@@ -79,17 +79,27 @@ if page == "Registrar usuario":
     with st.form("form_registrar"):
         col1, col2 = st.columns(2)
         with col1:
-            nombre = st.text_input("Nombre completo")
+            nombre = st.text_input("Ingrese su nombres")
+            apellidos = st.text_input("Ingrese sus apellidos")
             edad = st.number_input("Edad", min_value=0, max_value=120, value=18)
             ocupacion = st.selectbox("Ocupación",
                                      ["estudiante", "docente", "trabajador", "desempleado", "jubilado", "otro"])
+            direccion = st.text_input("Ingrese su direccion")
+
+
+
         with col2:
             acceso_internet = st.selectbox("Acceso a internet", [0, 1], format_func=lambda x: "No" if x == 0 else "Sí",
                                            index=0)
             dispositivo_propio = st.selectbox("Dispositivo propio", [0, 1],
                                               format_func=lambda x: "No" if x == 0 else "Sí", index=0)
-            personas_hogar = st.number_input("Personas en hogar", min_value=1, value=3)
-            contacto = st.text_input("Contacto (tel/email)")
+            correo_electronico = st.text_input("Correo electrónico", value=None)
+
+            sexo = st.selectbox("Sexo", ["Masculino", "Femenino"])
+
+            telefono = st.text_input("Ingrese su telefono")
+
+
         registrar = st.form_submit_button("Registrar usuario")
         if registrar:
             usuarios = st.session_state["usuarios"]
@@ -97,13 +107,16 @@ if page == "Registrar usuario":
             nuevo = {
                 "id": new_id,
                 "nombre": nombre,
+                "apellidos": apellidos,
                 "edad": edad,
+                "sexo": sexo,
+                "direccion": direccion,
+                "telefono": telefono,
+                "correo_electronico": correo_electronico,
                 "ocupacion": ocupacion,
-                "acceso_internet": acceso_internet,
-                "dispositivo_propio": dispositivo_propio,
-                "personas_hogar": personas_hogar,
+                "internet": acceso_internet,
+                "dispositivo": dispositivo_propio,
                 "fecha_registro": datetime.now().date().isoformat(),
-                "contacto": contacto
             }
             usuarios = pd.concat([usuarios, pd.DataFrame([nuevo])], ignore_index=True)
 
@@ -111,7 +124,7 @@ if page == "Registrar usuario":
 
             conexion_activa.insertar_registro("usuarios", nuevo)
             st.success("Usuario registrado ✅")
-            st.experimental_rerun()
+
 
 # ---------------------------
 # Página: Dashboard
