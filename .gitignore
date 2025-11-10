@@ -179,3 +179,9 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Ignorar bases de datos de prueba
+*.db
+
+# Ignorar la carpeta de configuración de PyCharm
+.idea/

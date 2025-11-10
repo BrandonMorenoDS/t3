@@ -32,7 +32,7 @@ def calcular_puntaje_row(row, pesos_internos, pesos_globales):
     return s
 
 
-@st.cache_data
+
 def recalcular_puntajes_asignaciones():
     """ Calcula los puntajes y lo guarda en la columna puntaje de la sessionState usuarios"""
     usuarios_df = st.session_state["usuarios"]

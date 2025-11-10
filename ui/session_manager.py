@@ -1,22 +1,15 @@
-import datetime
+from datetime import datetime
 
 import streamlit as st
 import  core.priorizacion
 from data.conexion_sqlite import ConexionSQLite
+from core.priorizacion import recalcular_puntajes_asignaciones
 
 conexion_activa = ConexionSQLite()
 
 
 def init_session():
-    # inicializar data en session_state para no recargar constantemente
-    if "usuarios" not in st.session_state:
-        st.session_state["usuarios"] = conexion_activa.cargar_tabla_df("usuarios")
-        print(st.session_state["usuarios"])
 
-        if "puntaje" not in st.session_state["usuarios"].columns:
-            # 2. Si no existe, créala y asígnale un valor por defecto (ej. 0.0)
-            st.session_state["usuarios"]["puntaje"] = 0.0
-            print("Columna 'puntaje' virtual añadida a st.session_state['usuarios'].")
 
     if "recursos" not in st.session_state:
         st.session_state["recursos"] = conexion_activa.cargar_tabla_df("recursos")
@@ -38,6 +31,18 @@ def init_session():
     if "last_saved" not in st.session_state:
         st.session_state["last_saved"] = None
 
+    # inicializar data en session_state para no recargar constantemente
+    if "usuarios" not in st.session_state:
+        st.session_state["usuarios"] = conexion_activa.cargar_tabla_df("usuarios")
+        print(st.session_state["usuarios"])
+
+        if "puntaje" not in st.session_state["usuarios"].columns:
+            # 2. Si no existe, créala y asígnale un valor por defecto (ej. 0.0)
+            st.session_state["usuarios"]["puntaje"] = 0.0
+            print("Columna 'puntaje' virtual añadida a st.session_state['usuarios'].")
+
+    print("Primera carga: Calculando puntajes iniciales...")
+    recalcular_puntajes_asignaciones()
 
 # --- FUNCIONES DE MANEJO DE ESTADO ---
 
@@ -52,6 +57,7 @@ def cambiar_estado_edicion():
 def guardar_cambios():
     st.session_state.pesos_globales = st.session_state.temp_pesos
     st.session_state.last_saved = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     st.session_state.editando = False
     core.priorizacion.recalcular_puntajes_asignaciones()
 

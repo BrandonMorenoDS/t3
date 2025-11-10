@@ -51,21 +51,24 @@ def agendar_citas_disponibles(conexion: ConexionSQLite, capacidad_diaria: int, f
 
     # --- Listas de "borrador" para preparar la escritura en DB ---
     nuevas_asignaciones_list = []  # Para las NUEVAS filas de 'asignaciones'
-    recursos_ids_a_actualizar = []  # Para los IDs de 'recursos' que hay que ACTUALIZAR
+    recursos_ids_a_actualizar = []  # Para los ID de 'recursos' que hay que ACTUALIZAR
 
     # 5. El Bucle de Agendamiento (¡Solo en Memoria!)
     id_asignacion_max = asignaciones_df["id"].max() if not asignaciones_df.empty else 0
 
     for i in range(lote_a_procesar):
         # Tomar al usuario y al recurso de este "lote"
+
+
         usuario_actual = usuarios_pendientes.iloc[i]
+
         recurso_actual = recursos_disponibles.iloc[i]
 
         # Calcular la fecha usando tu parámetro de capacidad diaria
         fecha_cita_calculada = calcular_fecha_cita(i, capacidad_diaria, fecha_inicio)
 
         # --- A. Preparar la actualización del Recurso ---
-        # (¡ARREGLO DE BUG 1!)
+
         # Guardamos el ID del recurso para actualizarlo más tarde
         recursos_ids_a_actualizar.append(int(recurso_actual["id"]))
 
@@ -82,11 +85,9 @@ def agendar_citas_disponibles(conexion: ConexionSQLite, capacidad_diaria: int, f
         }
         nuevas_asignaciones_list.append(nuevo_dict)
 
-        # --- (¡ARREGLO DE BUG 2!) ---
-        # ¡HEMOS QUITADO la llamada a conexion.insertar_registro() de aquí!
-        # Ya no hablamos con la DB dentro del bucle.
 
-    # 6. Guardar los cambios en la Base de Datos (¡Ahora SÍ!)
+
+
     # El bucle terminó. Ahora hacemos las 2 operaciones de DB.
 
     if not nuevas_asignaciones_list:
