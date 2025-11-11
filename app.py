@@ -11,6 +11,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 import data.conexion_sqlite
+#graficos
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 
 # Obtengo el objeto conexión
 conexion_activa = ConexionSQLite()
@@ -69,7 +73,7 @@ def marcar_ausente(id_asig):
 # Layout: navegación simple
 # ---------------------------
 st.sidebar.title("Navegación")
-page = st.sidebar.radio("Ir a", ["Dashboard", "Registrar usuario", "Configuración"])
+page = st.sidebar.radio("Ir a", ["Dashboard", "Registrar usuario", "Configuración", "Graficos"])
 
 # ---------------------------
 # Página: Registrar usuario
@@ -83,7 +87,7 @@ if page == "Registrar usuario":
             apellidos = st.text_input("Ingrese sus apellidos")
             edad = st.number_input("Edad", min_value=0, max_value=120, value=18)
             ocupacion = st.selectbox("Ocupación",
-                                     ["estudiante", "docente", "trabajador", "desempleado", "jubilado", "otro"])
+                                     ["Estudiante", "Empleado","Jubilado", "Desempleado", "Otro" ])
             direccion = st.text_input("Ingrese su direccion")
 
 
@@ -270,6 +274,165 @@ if page == "Dashboard":
         if st.button("Exportar asignaciones CSV"):
             st.session_state["asignaciones"].to_csv("asignaciones.csv", index=False)
             st.success("asignaciones.csv creado")
+
+# ---------------------------
+# Pagina : Graficos
+# ---------------------------
+
+if page == "Graficos":
+
+    st.title("📊 Análisis y Estadísticas de Usuarios")
+
+    # --- Cargar datos ---
+    usuarios_df = st.session_state["usuarios"]
+
+    # --- Validación de datos ---
+    if usuarios_df is None or usuarios_df.empty:
+        st.warning("⚠️ No hay datos registrados aún.")
+        st.stop()
+
+    st.write("👥 Total de usuarios registrados:", len(usuarios_df))
+
+    # --- Tema visual coherente con Streamlit ---
+    sns.set_theme(style="whitegrid")
+    plt.rcParams["figure.facecolor"] = "#0E1117"
+    plt.rcParams["axes.facecolor"] = "#0E1117"
+    plt.rcParams["text.color"] = "white"
+    plt.rcParams["axes.labelcolor"] = "white"
+    plt.rcParams["xtick.color"] = "white"
+    plt.rcParams["ytick.color"] = "white"
+
+    # --- GRÁFICO DE DISTRIBUCIÓN DE PUNTAJES ---
+    st.subheader("Distribución de Puntajes de Prioridad")
+    if "puntaje" in usuarios_df.columns:
+        # Asegurarse de que el puntaje sea numérico
+        puntajes_num = pd.to_numeric(usuarios_df["puntaje"], errors='coerce').dropna()
+
+        if not puntajes_num.empty:
+            fig_puntaje, ax_puntaje = plt.subplots()
+            sns.histplot(puntajes_num, bins=15, kde=True, color="#58a6ff", ax=ax_puntaje)
+            ax_puntaje.set_xlabel("Puntaje")
+            ax_puntaje.set_ylabel("Cantidad de Usuarios")
+            ax_puntaje.set_title("Distribución de Puntajes", color="white")
+            st.pyplot(fig_puntaje)
+        else:
+            st.info("No hay datos de puntaje válidos para mostrar.")
+    else:
+        st.info("La columna 'puntaje' no está disponible en los datos de sesión.")
+    # --- FIN DE GRÁFICO NUEVO ---
+
+
+    # --- DISTRIBUCIÓN POR OCUPACIÓN ---
+    st.subheader("Distribución de usuarios por ocupación")
+    if "ocupacion" in usuarios_df.columns:
+        ocupacion_counts = usuarios_df["ocupacion"].value_counts()
+        st.bar_chart(ocupacion_counts)
+    else:
+        st.info("No se encontró la columna 'ocupacion'.")
+
+    # --- DISTRIBUCIÓN DE EDADES ---
+    st.subheader("Distribución de edades")
+    if "edad" in usuarios_df.columns:
+        fig1, ax1 = plt.subplots()
+        sns.histplot(usuarios_df["edad"], bins=10, kde=True, color="#58a6ff", ax=ax1)
+        ax1.set_xlabel("Edad")
+        ax1.set_ylabel("Cantidad")
+        ax1.set_title("Distribución de edades de los usuarios", color="white")
+        st.pyplot(fig1)
+    else:
+        st.info("No se encontró la columna 'edad'.")
+
+    # --- DISTRIBUCIÓN POR SEXO (Pie Chart) ---
+    st.subheader("Distribución por sexo")
+    if "sexo" in usuarios_df.columns:
+        sexo_counts = usuarios_df["sexo"].value_counts()
+        fig2, ax2 = plt.subplots(facecolor="#0E1117")
+        ax2.set_facecolor("#0E1117")
+        ax2.pie(
+            sexo_counts,
+            labels=sexo_counts.index,
+            autopct='%1.1f%%',
+            startangle=90,
+            colors=["#8ecae6", "#219ebc"],
+            textprops={"color": "white"}
+        )
+        ax2.axis("equal")
+        st.pyplot(fig2)
+    else:
+        st.info("No se encontró la columna 'sexo'.")
+
+
+    # --- función utilitaria para normalizar valores binarios a "Sí"/"No" ---
+    def binario_a_si_no(serie):
+        # Convertir a string, limpiar espacios y bajar a minúsculas
+        s = serie.astype(str).str.strip().str.lower().fillna("")
+        # Mapeo amplio: reconoce 1, "1", "true", "t", "si", "sí", "yes" como Sí
+        si_vals = {"1", "true", "t", "si", "sí", "yes", "y"}
+        no_vals = {"0", "false", "f", "no", "n", ""}
+        # Aplicar mapeo
+        mapped = s.map(lambda v: "Sí" if v in si_vals else ("No" if v in no_vals else "No"))
+        # Finalmente, contar
+        return mapped
+
+
+    # --- ACCESO A INTERNET (Pie Chart) ---
+    st.subheader("Usuarios con acceso a internet")
+    if "internet" in usuarios_df.columns:
+        # normalizar y contar
+        acceso_normal = binario_a_si_no(usuarios_df["internet"])
+        acceso_df = acceso_normal.value_counts().reindex(["Sí", "No"]).fillna(0)
+        fig3, ax3 = plt.subplots(facecolor="#0E1117")
+        ax3.set_facecolor("#0E1117")
+        ax3.pie(
+            acceso_df,
+            labels=acceso_df.index,
+            autopct='%1.1f%%',
+            startangle=90,
+            colors=["#ffb703", "#fb8500"],
+            textprops={"color": "white"}
+        )
+        ax3.axis("equal")
+        st.pyplot(fig3)
+    else:
+        st.info("No se encontró la columna 'internet'.")
+
+    # --- DISPOSITIVO PROPIO (Pie Chart) ---
+    st.subheader("Usuarios con dispositivo propio")
+    if "dispositivo" in usuarios_df.columns:
+        disp_normal = binario_a_si_no(usuarios_df["dispositivo"])
+        disp_df = disp_normal.value_counts().reindex(["Sí", "No"]).fillna(0)
+        fig4, ax4 = plt.subplots(facecolor="#0E1117")
+        ax4.set_facecolor("#0E1117")
+        ax4.pie(
+            disp_df,
+            labels=disp_df.index,
+            autopct='%1.1f%%',
+            startangle=90,
+            colors=["#adb5bd", "#2a9d8f"],
+            textprops={"color": "white"}
+        )
+        ax4.axis("equal")
+        st.pyplot(fig4)
+    else:
+        st.info("No se encontró la columna 'dispositivo'.")
+
+    # --- REGISTROS POR FECHA ---
+    st.subheader("Usuarios registrados por fecha")
+    if "fecha_registro" in usuarios_df.columns:
+        try:
+            usuarios_df["fecha_registro"] = pd.to_datetime(usuarios_df["fecha_registro"], errors="coerce")
+            registros_por_fecha = usuarios_df["fecha_registro"].dt.date.value_counts().sort_index()
+            st.line_chart(registros_por_fecha)
+        except Exception as e:
+            st.info(f"No se pudo procesar la fecha de registro: {e}")
+    else:
+        st.info("No se encontró la columna 'fecha_registro'.")
+
+    # --- VISTA GENERAL DE USUARIOS ---
+    st.subheader("Vista general de usuarios")
+    if all(col in usuarios_df.columns for col in ["nombre", "apellidos", "ocupacion", "edad"]):
+        vista = usuarios_df[["nombre", "apellidos", "ocupacion", "edad"]].sort_values("edad")
+        st.dataframe(vista)
 
 # ---------------------------
 # Fin
