@@ -11,10 +11,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 import data.conexion_sqlite
-#graficos
+# graficos
 import matplotlib.pyplot as plt
 import seaborn as sns
-
 
 # Obtengo el objeto conexión
 conexion_activa = ConexionSQLite()
@@ -73,7 +72,7 @@ def marcar_ausente(id_asig):
 # Layout: navegación simple
 # ---------------------------
 st.sidebar.title("Navegación")
-page = st.sidebar.radio("Ir a", ["Dashboard", "Registrar usuario", "Configuración", "Graficos"])
+page = st.sidebar.radio("Ir a", ["Dashboard", "Registrar usuario","Graficos"])
 
 # ---------------------------
 # Página: Registrar usuario
@@ -87,10 +86,8 @@ if page == "Registrar usuario":
             apellidos = st.text_input("Ingrese sus apellidos")
             edad = st.number_input("Edad", min_value=0, max_value=120, value=18)
             ocupacion = st.selectbox("Ocupación",
-                                     ["Estudiante", "Empleado","Jubilado", "Desempleado", "Otro" ])
+                                     ["Estudiante", "Empleado", "Jubilado", "Desempleado", "Otro"])
             direccion = st.text_input("Ingrese su direccion")
-
-
 
         with col2:
             acceso_internet = st.selectbox("Acceso a internet", [0, 1], format_func=lambda x: "No" if x == 0 else "Sí",
@@ -102,7 +99,6 @@ if page == "Registrar usuario":
             sexo = st.selectbox("Sexo", ["Masculino", "Femenino"])
 
             telefono = st.text_input("Ingrese su telefono")
-
 
         registrar = st.form_submit_button("Registrar usuario")
         if registrar:
@@ -128,7 +124,6 @@ if page == "Registrar usuario":
 
             conexion_activa.insertar_registro("usuarios", nuevo)
             st.success("Usuario registrado ✅")
-
 
 # ---------------------------
 # Página: Dashboard
@@ -247,12 +242,10 @@ if page == "Dashboard":
     st.dataframe(usuarios_ord[["id", "nombre", "ocupacion", "puntaje"]], use_container_width=True)
 
     st.markdown("#### Asignar tablets")
-    col_s1, col_s2, col_s3 = st.columns([1, 1, 2])
+    col_s1, col_s2 = st.columns([1, 1])
     with col_s1:
-        stock = st.number_input("Stock a asignar", min_value=0, value=5)
-    with col_s2:
         capacidad = st.number_input("Capacidad diaria", min_value=1, value=5)
-    with col_s3:
+    with col_s2:
         fecha_inicio = st.date_input("Fecha inicio", value=datetime.now().date())
     if st.button("Asignar tablets (usar ranking actual)"):
         core.agendador.agendar_citas_disponibles(conexion_activa, capacidad, fecha_inicio)
@@ -290,7 +283,11 @@ if page == "Graficos":
     if usuarios_df is None or usuarios_df.empty:
         st.warning("⚠️ No hay datos registrados aún.")
         st.stop()
-
+    # --- ¡NUEVA SECCIÓN DE PRESUPUESTO! ---
+    # (El código de la función está en core/agendador.py)
+    core.agendador.calcular_y_mostrar_presupuesto()
+    st.markdown("---")
+    # --- FIN DE LA NUEVA SECCIÓN ---
     st.write("👥 Total de usuarios registrados:", len(usuarios_df))
 
     # --- Tema visual coherente con Streamlit ---
@@ -320,7 +317,6 @@ if page == "Graficos":
     else:
         st.info("La columna 'puntaje' no está disponible en los datos de sesión.")
     # --- FIN DE GRÁFICO NUEVO ---
-
 
     # --- DISTRIBUCIÓN POR OCUPACIÓN ---
     st.subheader("Distribución de usuarios por ocupación")

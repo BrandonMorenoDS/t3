@@ -59,7 +59,6 @@ def agendar_citas_disponibles(conexion: ConexionSQLite, capacidad_diaria: int, f
     for i in range(lote_a_procesar):
         # Tomar al usuario y al recurso de este "lote"
 
-
         usuario_actual = usuarios_pendientes.iloc[i]
 
         recurso_actual = recursos_disponibles.iloc[i]
@@ -84,9 +83,6 @@ def agendar_citas_disponibles(conexion: ConexionSQLite, capacidad_diaria: int, f
             # ... (tus otros campos)
         }
         nuevas_asignaciones_list.append(nuevo_dict)
-
-
-
 
     # El bucle terminó. Ahora hacemos las 2 operaciones de DB.
 
@@ -124,3 +120,85 @@ def agendar_citas_disponibles(conexion: ConexionSQLite, capacidad_diaria: int, f
     conexion.cargar_tabla_df.clear()
 
     st.success(f"¡Éxito! Se agendaron {len(df_nuevas)} nuevas citas.")
+
+
+def calcular_y_mostrar_presupuesto():
+    """
+    Calcula el déficit de recursos y estima el presupuesto
+    necesario, basándose en los datos de session_state.
+    Muestra los resultados directamente en la UI de Streamlit.
+    """
+
+    # 1. Cargar el estado actual (igual que en agendar_citas)
+    try:
+        recursos_df = st.session_state["recursos"].copy()
+        usuarios_df = st.session_state["usuarios"].copy()
+        asignaciones_df = st.session_state["asignaciones"].copy()
+    except KeyError:
+        st.error("Error: Los datos de sesión no están cargados. Asegúrese de que init_session se haya ejecutado.")
+        return
+
+    # 2. Calcular Demanda Real (Usuarios Pendientes)
+    ids_con_cita_activa = set(
+        asignaciones_df[asignaciones_df["estado"].isin(["asignado", "entregado"])]
+        ["id_usuario"].astype(int).tolist()
+    ) if not asignaciones_df.empty else set()
+
+    usuarios_pendientes_df = usuarios_df[
+        ~usuarios_df["id"].astype(int).isin(ids_con_cita_activa)
+    ]
+    demanda_real = len(usuarios_pendientes_df)
+
+    # 3. Calcular Stock Actual
+    stock_actual = len(recursos_df[recursos_df["estado"] == "disponible"])
+
+    # 4. Calcular Déficit
+    deficit = demanda_real - stock_actual
+
+    # 5. Calcular y Mostrar Resultados
+    st.subheader("Estimación de Presupuesto (Tablets)")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Demanda Real (Usuarios Pendientes)", f"{demanda_real} Usuarios")
+    col2.metric("Stock Actual (Tablets Disponibles)", f"{stock_actual} Unidades")
+
+    if deficit <= 0:
+        col3.metric("Déficit de Recursos", "0 Unidades")
+        st.success("¡Buenas noticias! El stock actual es suficiente para cubrir la demanda pendiente.")
+        return
+
+    # --- Lógica de Presupuesto (Si hay déficit) ---
+    col3.metric("Déficit de Recursos", f"{deficit} Unidades", delta_color="inverse")
+
+    # 6. Calcular Costo Promedio (El paso de "Data Science")
+    # Usamos un valor por defecto en caso de que la columna no exista o esté vacía
+    costo_promedio_default = 350.0
+    costo_promedio_real = costo_promedio_default
+
+    if "precio" in recursos_df.columns and not recursos_df["precio"].isnull().all():
+        # Calcula el promedio solo de los precios válidos (mayores a 0)
+        precios_validos = recursos_df[recursos_df["precio"] > 0]["precio"]
+
+        if not precios_validos.empty:
+            costo_promedio_real = precios_validos.mean()
+        else:
+            st.warning("No se encontraron precios válidos (> 0) en el inventario. Usando costo por defecto.")
+    else:
+        st.warning(
+            f"No se encontró una columna 'precio' válida en la tabla 'recursos'. Usando un costo promedio por defecto de S/ {costo_promedio_default:,.2f}.")
+
+    # 7. Calcular Presupuesto Total
+    presupuesto_total = deficit * costo_promedio_real
+
+    st.markdown("---")
+    st.subheader("Presupuesto Adicional Requerido")
+    col_presupuesto1, col_presupuesto2 = st.columns(2)
+    col_presupuesto1.metric(
+        "Costo Promedio por Tablet (Calculado)",
+        f"S/ {costo_promedio_real:,.2f}"
+    )
+    col_presupuesto2.metric(
+        "Presupuesto Total Estimado",
+        f"S/ {presupuesto_total:,.2f}",
+        delta_color="inverse"
+    )
