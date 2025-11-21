@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.express as px
 
 # Tus módulos personalizados
@@ -11,6 +11,139 @@ from data.conexion_sqlite import ConexionSQLite
 
 # --- 1. CONFIGURACIÓN Y CARGA INICIAL ---
 st.set_page_config(page_title="Gestión Bibliotecaria", layout="wide", page_icon="📚")
+
+
+# ---------------------------
+# Acciones: marcar entregado / ausente
+# ---------------------------
+def marcar_entregado(id_asig):
+    """Actualiza el estado de una asignación a 'entregado' en la DB."""
+    datos_a_actualizar = {
+        "estado": "entregado",
+        "creado_ts": datetime.now().isoformat()
+    }
+    condicion_where = "id = ?"
+    argumentos_where = (id_asig,)
+
+    exito = conexion_activa.actualizar_registros(
+        "asignaciones",
+        datos_a_actualizar,
+        condicion_where,
+        argumentos_where
+    )
+    if exito:
+        st.success("Marcado como entregado ✅")
+        conexion_activa.cargar_tabla_df.clear()
+
+        # Borrar caché de sesión para forzar recarga
+        if "asignaciones" in st.session_state: del st.session_state["asignaciones"]
+
+        st.rerun()
+    else:
+        st.error("Error al actualizar el estado.")
+
+
+def marcar_ausente(id_asig):
+    """
+    Maneja la falta del usuario:
+    - 1ra falta: Reprograma para mañana (mueve de Tab).
+    - 2da falta: Elimina asignación, libera recurso y BORRA al usuario.
+    """
+    asign = st.session_state["asignaciones"]
+
+    # Obtener datos actuales de la fila
+    fila = asign[asign["id"] == id_asig]
+    if fila.empty:
+        st.error("Asignación no encontrada")
+        return
+
+    # --- CORRECCIÓN DE BUG: Manejo robusto de NULL/NaN ---
+    val_intentos = fila.iloc[0]["intentos_fallidos"]
+
+    # Verificamos explícitamente si es nulo usando pd.isna()
+    if pd.isna(val_intentos) or val_intentos is None or val_intentos == "":
+        intentos_actuales = 0
+    else:
+        try:
+            intentos_actuales = int(val_intentos)
+        except ValueError:
+            intentos_actuales = 0
+    # -----------------------------------------------------
+
+    id_usuario = int(fila.iloc[0]["id_usuario"])
+    id_recurso = int(fila.iloc[0]["id_recurso"])
+    fecha_actual_str = fila.iloc[0]["fecha_cita"]
+
+    # --- LÓGICA DE STRIKES ---
+
+    if intentos_actuales == 0:
+        # === STRIKE 1: REPROGRAMAR ===
+
+        # 1. Calcular fecha siguiente (Mañana)
+        try:
+            # Intentamos parsear la fecha actual
+            fecha_dt = datetime.strptime(fecha_actual_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            # Si falla, usamos hoy como base
+            fecha_dt = datetime.now()
+
+        nueva_fecha = (fecha_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # 2. Preparar actualización
+        datos_a_actualizar = {
+            "intentos_fallidos": intentos_actuales + 1,
+            "estado": "ausente_1",
+            "fecha_cita": nueva_fecha,  # <--- ¡ESTO LO MUEVE DE PESTAÑA!
+            "creado_ts": datetime.now().isoformat()
+        }
+
+        exito = conexion_activa.actualizar_registros(
+            "asignaciones",
+            datos_a_actualizar,
+            "id = ?",
+            (id_asig,)
+        )
+
+        if exito:
+            st.toast(f"Reprogramado para {nueva_fecha} (Falta 1/2).", icon="📅")
+
+    else:
+        # === STRIKE 2: ELIMINACIÓN TOTAL ===
+
+        # 1. Liberar el recurso (volver a disponible)
+        conexion_activa.actualizar_registros(
+            "recursos",
+            {"estado": "disponible"},
+            "id = ?",
+            (id_recurso,)
+        )
+
+        # 2. Eliminar la ASIGNACIÓN (borrar registro)
+        conexion_activa.eliminar_registros(
+            "asignaciones",
+            "id = ?",
+            (id_asig,)
+        )
+
+        # 3. Eliminar al USUARIO (borrar registro para que no vuelva a postular)
+        conexion_activa.eliminar_registros(
+            "usuarios",
+            "id = ?",
+            (id_usuario,)
+        )
+
+        st.toast("Usuario eliminado del sistema por inasistencias.", icon="🚫")
+
+    # --- LIMPIEZA FINAL ---
+    # Forzamos recarga de TODO porque hemos tocado las 3 tablas
+    conexion_activa.cargar_tabla_df.clear()
+
+    if "asignaciones" in st.session_state: del st.session_state["asignaciones"]
+    if "recursos" in st.session_state: del st.session_state["recursos"]
+    if "usuarios" in st.session_state: del st.session_state["usuarios"]
+
+    st.rerun()
+
 
 # --- CSS BLINDADO ---
 st.markdown("""
@@ -320,9 +453,54 @@ elif st.session_state.pagina_actual == "Dashboard":
                     st.info("¡No hay usuarios pendientes en la cola!")
 
                 # --- FIN DEL FILTRO ---
-            with st.container(border=True):
-                st.markdown("####  Asignaciones Activas")
-                st.dataframe(asignaciones_df, use_container_width=True, height=250)
+            st.subheader("Gestión de Asignaciones (Por Fecha)")
+
+            asign = st.session_state["asignaciones"]
+
+            if not asign.empty:
+                # 1. Separar ACTIVAS vs HISTORIAL
+                # Activas: 'asignado', 'ausente_1'
+                # Historial: 'entregado', 'eliminado'
+                asign_activas = asign[asign["estado"].isin(["asignado", "ausente_1"])].copy()
+                asign_historial = asign[asign["estado"].isin(["entregado", "eliminado"])].copy()
+
+                # --- SECCIÓN DE PESTAÑAS (Solo para activas) ---
+                if not asign_activas.empty:
+                    # Asegurar orden
+                    asign_activas = asign_activas.sort_values("fecha_cita")
+                    fechas_unicas = asign_activas["fecha_cita"].unique()
+                    fechas_unicas = sorted([f for f in fechas_unicas if f is not None])
+
+                    if len(fechas_unicas) > 0:
+                        # Crear pestañas dinámicas
+                        tabs = st.tabs([f"📅 {f}" for f in fechas_unicas])
+
+                        for i, fecha in enumerate(fechas_unicas):
+                            with tabs[i]:
+                                asign_dia = asign_activas[asign_activas["fecha_cita"] == fecha]
+
+                                for index, row in asign_dia.iterrows():
+                                    estado_actual = row['estado']
+                                    icono = "🔹" if estado_actual == "asignado" else "⚠️"  # ausente_1
+
+                                    with st.expander(
+                                            f"{icono} Cita #{row['id']} - Usuario {row['id_usuario']} ({estado_actual})"):
+                                        col_info, col_btns = st.columns([2, 1])
+                                        with col_info:
+                                            st.write(f"**Recurso ID:** {row['id_recurso']}")
+                                            st.write(f"**Puntaje:** {row.get('puntaje_snapshot', 'N/A')}")
+                                        with col_btns:
+                                            # Aquí solo mostramos botones de acción porque SON activas
+                                            if st.button("✅ Entregado", key=f"ent_{row['id']}",
+                                                         use_container_width=True):
+                                                marcar_entregado(row['id'])
+                                            if st.button("🚫 Falta", key=f"aus_{row['id']}", use_container_width=True):
+                                                marcar_ausente(row['id'])
+                    else:
+                        st.info("Hay asignaciones activas pero sin fecha válida.")
+                else:
+                    st.info("¡Todo al día! No hay citas pendientes de atención.")
+
         with col_der:
             with st.expander("⚙ Criterios", expanded=st.session_state.editando):
                 # ... (Tus controles de sliders)
