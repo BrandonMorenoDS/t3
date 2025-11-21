@@ -10,6 +10,8 @@ conexion_activa = ConexionSQLite()
 
 def init_session():
 
+    if 'pagina_actual' not in st.session_state:
+        st.session_state.pagina_actual = "Dashboard"
 
     if "recursos" not in st.session_state:
         st.session_state["recursos"] = conexion_activa.cargar_tabla_df("recursos")

@@ -7,7 +7,26 @@ import streamlit as st
 from data.conexion_sqlite import ConexionSQLite
 
 pesos_internos = {
-    "ocupacion": {"estudiante": 10, "docente": 8, "trabajador": 6, "desempleado": 5, "jubilado": 7, "otro": 3},
+    "ocupacion": {
+        # Prioridad Máxima
+        "estudiante escolar": 10,
+        "estudiante superior": 9,
+        "buscando empleo": 9,
+
+        # Prioridad Alta
+        "docente": 8,
+        "jubilado": 7,
+
+        # Prioridad Media
+        "trabajador independiente": 6,
+        "hogar": 5,
+
+        # Prioridad Baja
+        "trabajador dependiente": 3,
+
+        # Fallback
+        "Otro": 2
+    },
     "acceso_internet": {0: 1,
                         1: 0}
     ,
